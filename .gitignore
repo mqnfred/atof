@@ -1,3 +1,6 @@
+# envrc for using https://direnv.net to load activate.sh
+.envrc
+
 # tools generated at setup-time
 tools/rustup-init.sh
 tools/rustup
