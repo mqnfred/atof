@@ -1,12 +1,12 @@
 #!/bin/bash
 
-test -z "$TOOLS_DIR"		&& TOOLS_DIR="tools"; mkdir -p "$TOOLS_DIR"
-test -z "$RUSTUP_INSTALLER"	&& RUSTUP_INSTALLER="$TOOLS_DIR/rustup-init.sh"
-test -z "$RUSTUP_HOME"		&& RUSTUP_HOME="$TOOLS_DIR/rustup"
-test -z "$CARGO_HOME"		&& CARGO_HOME="$TOOLS_DIR/cargo"
-test -z "$RUST_TARGETS"		&& RUST_TARGETS="x86_64-unknown-linux-gnu x86_64-apple-darwin"
-test -z "$RUST_VERSION"		&& RUST_VERSION="1.45.0"
-test -z "$ACTIVATE"		&& ACTIVATE=activate.sh
+test -z "$TOOLS_DIR"		&& export TOOLS_DIR="tools"; mkdir -p "$TOOLS_DIR"
+test -z "$RUSTUP_INSTALLER"	&& export RUSTUP_INSTALLER="$TOOLS_DIR/rustup-init.sh"
+test -z "$RUSTUP_HOME"		&& export RUSTUP_HOME="$TOOLS_DIR/rustup"
+test -z "$CARGO_HOME"		&& export CARGO_HOME="$TOOLS_DIR/cargo"
+test -z "$RUST_TARGETS"		&& export RUST_TARGETS="x86_64-unknown-linux-gnu x86_64-apple-darwin"
+test -z "$RUST_VERSION"		&& export RUST_VERSION="1.45.0"
+test -z "$ACTIVATE"		&& export ACTIVATE=activate.sh
 
 # pull rustup installer, for more info visit https://rustup.rs
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs -o "$RUSTUP_INSTALLER"
