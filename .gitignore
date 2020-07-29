@@ -1,0 +1,5 @@
+# tools generated at setup-time
+tools/rustup-init.sh
+tools/rustup
+tools/cargo
+activate.sh
