@@ -3,8 +3,11 @@ use tokio::sync::Notify;
 
 #[tokio::main]
 async fn main() {
+    use std::env::args;
+    let bind_addr = args().skip(1).next().expect("please provide addr:port to bind to");
+
     let stop = Arc::new(Notify::new());
-    let server_fut = run_server("localhost:5000", stop.clone());
+    let server_fut = run_server(&bind_addr, stop.clone());
     let cancel_fut = handle_ctrl_c(stop.clone()); // server will run until sby hits ctrl-c
 
     use tokio::join;

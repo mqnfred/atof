@@ -6,7 +6,8 @@ use tokio::sync::mpsc::{
 };
 
 fn main() {
-    let addr = "localhost:5000";
+    use std::env::args;
+    let addr = args().skip(1).next().expect("please provide addr:port to connect to");
 
     // establish ui<->connection inter-thread communication
     use tokio::sync::mpsc::unbounded_channel;
@@ -14,7 +15,7 @@ fn main() {
     let (ui_sender, ui_recver) = unbounded_channel();
 
     use std::thread::spawn;
-    let _ = spawn(move || { connect_thread(addr, connect_recver, ui_sender) }).join();
+    let _ = spawn(move || { connect_thread(&addr, connect_recver, ui_sender) }).join();
     let _ = spawn(move || { ui_thread(ui_recver, connect_sender) }).join();
 }
 

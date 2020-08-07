@@ -20,7 +20,7 @@ pub async fn run_connect_task(
     // set up ping interval at 25s
     use std::time::Duration;
     use tokio::time::interval;
-    let mut keepalive = interval(Duration::from_secs(35));
+    let mut keepalive = interval(Duration::from_secs(25));
 
     loop {
         use tokio::select;
