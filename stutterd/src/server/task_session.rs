@@ -99,7 +99,10 @@ pub async fn run_session_task(
                     // TODO should this packet be handled by media task? that would
                     // enable the client to see full voice packet roundtrip picture?
                     ControlPacket::Ping(ts) => {
+                        // register the ping
                         last_ping = Instant::now();
+
+                        // answer with a pong
                         let packet = ControlPacket::Ping(ts).into();
                         if let Err(err) = client_stream.send(packet).await {
                             // io error, for now we consider them terminal (TODO refine)
@@ -144,12 +147,17 @@ pub async fn run_session_task(
             },
 
             // check that we recently got a ping every 30s, otherwise drop
-            _ = keepalive_check.next() => if last_ping.elapsed() > timeout {
-                eprintln!("session {} timed out, removing", session_id);
-                // might fail if control task is closed (a graceful shutdown
-                // is in progress), in which case nobody cares about our session
-                let _ = control_send.send(ControlMessage::RemoveSession(session_id));
-                break
+            _ = keepalive_check.next() => {
+                let since_last = last_ping.elapsed();
+                if since_last > timeout {
+                    // TODO we might want to send an error/whatever packet to the client here
+                    eprintln!("session {} timed out ({:?} since ping)", session_id, since_last);
+
+                    // might fail if control task is closed (a graceful shutdown
+                    // is in progress), in which case nobody cares about our session
+                    let _ = control_send.send(ControlMessage::RemoveSession(session_id));
+                    break
+                }
             },
         }
     }
