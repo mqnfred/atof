@@ -1,6 +1,7 @@
 [workspace]
 members = [
-	"mumble-protocol",
-	"stuttercli",
 	"stutterd",
+	"stuttertui",
+
+	"mumble-protocol",
 ]
