@@ -8,7 +8,39 @@ use tokio::sync::mpsc::{
 use tokio_util::codec::Framed;
 use tokio::net::TcpStream;
 
-pub async fn run_connect_task(
+pub fn run_connection_thread(
+    addr: &str,
+    connection_recver: UReceiver<ControlPacket<Serverbound>>, // from caller to server
+    ui_sender: USender<ControlPacket<Clientbound>>, // from server to caller
+) {
+    // we need to spawn a tokio runtime as the connection task is asynchronous
+    use tokio::runtime::Runtime;
+    let mut rt = match Runtime::new() {
+        Err(err) => { eprintln!("failed to start runtime: {}", err); return },
+        Ok(rt) => rt,
+    };
+
+    // connect to the server and spin up our connection task
+    rt.block_on(async move {
+        // connect to server and wrap connection in mumble control codec
+        let server_stream = match TcpStream::connect(&addr).await {
+            Ok(server_stream) => Framed::new(server_stream, ClientControlCodec::new()),
+            Err(err) => { eprintln!("failed to establish connection: {}", err); return },
+        };
+        eprintln!("established connection to server");
+
+        // the connection_task babysits the connection, it:
+        //
+        //  1. sends and receives server pings
+        //  2. forwards any server-bound packets to the server (from the ui thread)
+        //  3. forwards any client-bound packets to the ui thread (from the caller)
+        if let Err(err) = run_connection_task(server_stream, connection_recver, ui_sender).await {
+            eprintln!("connection error: {}", err);
+        }
+    });
+}
+
+async fn run_connection_task(
     mut server_stream: Framed<TcpStream, ClientControlCodec>,
     mut caller_recver: UReceiver<ControlPacket<Serverbound>>, // from caller to server
     caller_sender: USender<ControlPacket<Clientbound>>, // from server to caller
@@ -60,7 +92,7 @@ pub async fn run_connect_task(
         }
     }
 
-    eprintln!("connect task stopped");
+    eprintln!("connection task stopped");
     Ok(())
 }
 

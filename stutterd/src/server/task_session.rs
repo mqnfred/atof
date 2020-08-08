@@ -10,6 +10,7 @@ use tokio::sync::mpsc::{
 };
 use futures::sink::SinkExt;
 use futures::stream::StreamExt;
+use log::{warn,info,debug};
 
 pub async fn run_session_task(
     session_id: u32,
@@ -25,7 +26,7 @@ pub async fn run_session_task(
     let version = match version_exchange(server_version, &mut client_stream).await {
         Ok(version) => version,
         Err(err) => {
-            eprintln!("version exchange for {} failed: {}", session_id, err);
+            warn!("version exchange for {} failed: {}", session_id, err);
             return
         },
     };
@@ -40,10 +41,10 @@ pub async fn run_session_task(
     use super::task_control::UnAuthSession;
     let msg = ControlMessage::AddSession(session_id, UnAuthSession{version, send: session_send});
     if control_send.send(msg).is_err() { // control task is closed, graceful shutdown in progress
-        eprintln!("session task {} stopped (graceful shutdown in progress)", session_id);
+        warn!("session task {} stopped (graceful shutdown in progress)", session_id);
         return
     }
-    eprintln!("session {} declared itself", session_id);
+    info!("session {} declared itself", session_id);
 
     // set up session timeout at 30s if no ping
     use std::time::{Duration,Instant};
@@ -62,7 +63,7 @@ pub async fn run_session_task(
 
                     // io error, for now we consider them terminal (TODO refine)
                     Some(Err(err)) => {
-                        eprintln!("session {}: {}", session_id, err);
+                        warn!("session {}: {}", session_id, err);
                         // might fail if control task is closed (a graceful shutdown
                         // is in progress), in which case nobody cares about our session
                         let _ = control_send.send(ControlMessage::RemoveSession(session_id));
@@ -71,7 +72,7 @@ pub async fn run_session_task(
 
                     // the connection with the client got closed
                     None => {
-                        eprintln!("session {}: connection closed", session_id);
+                        warn!("session {}: connection closed", session_id);
                         // might fail if control task is closed (a graceful shutdown
                         // is in progress), in which case nobody cares about our session
                         let _ = control_send.send(ControlMessage::RemoveSession(session_id));
@@ -106,7 +107,7 @@ pub async fn run_session_task(
                         let packet = ControlPacket::Ping(ts).into();
                         if let Err(err) = client_stream.send(packet).await {
                             // io error, for now we consider them terminal (TODO refine)
-                            eprintln!("session {}: {}", session_id, err);
+                            warn!("session {}: {}", session_id, err);
 
                             // might fail if control task is closed (a graceful shutdown
                             // is in progress), in which case nobody cares about our session
@@ -131,13 +132,13 @@ pub async fn run_session_task(
 
                     // this happens when both control/media tasks stop and
                     // drop their senders, this is a graceful shutdown event
-                    None => { eprintln!("session task {} stops gracefully", session_id); return },
+                    None => { info!("session task {} stops gracefully", session_id); return },
                 };
 
                 // handling of client-bound packet is simple: we just forward it
                 if let Err(err) = client_stream.send(packet).await {
                     // io error, for now we consider them terminal (TODO refine)
-                    eprintln!("session {} abort: {}", session_id, err);
+                    warn!("session {} abort: {}", session_id, err);
 
                     // might fail if control task is closed (a graceful shutdown
                     // is in progress), in which case nobody cares about our session
@@ -151,7 +152,7 @@ pub async fn run_session_task(
                 let since_last = last_ping.elapsed();
                 if since_last > timeout {
                     // TODO we might want to send an error/whatever packet to the client here
-                    eprintln!("session {} timed out ({:?} since ping)", session_id, since_last);
+                    warn!("session {} timed out ({:?} since ping)", session_id, since_last);
 
                     // might fail if control task is closed (a graceful shutdown
                     // is in progress), in which case nobody cares about our session
@@ -162,7 +163,7 @@ pub async fn run_session_task(
         }
     }
 
-    eprintln!("session task {} stopped", session_id);
+    info!("session task {} stopped", session_id);
 }
 
 use mumble_protocol::control::msgs;

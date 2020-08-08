@@ -6,6 +6,7 @@ use tokio::sync::Notify;
 use tokio::sync::mpsc::UnboundedSender as USender;
 use tokio_util::codec::Framed;
 use mumble_protocol::control::ServerControlCodec;
+use log::{info,error};
 
 pub async fn run_accept_task(
     stop: Arc<Notify>, // listened on for stop signal (ctrl-c)
@@ -29,13 +30,13 @@ pub async fn run_accept_task(
                 Some(Err(err)) => {
                     // TODO: should we abort here or try again? are errors
                     // terminal or transient? assuming terminal for now
-                    eprintln!("encountered error while listening for new connections: {}", err);
+                    error!("encountered error while listening for new connections: {}", err);
                     break
                 },
                 Some(Ok(tcp_stream)) => {
                     // select unique id for the new session
                     let session_id = sessions.len() as u32;
-                    eprintln!("received new connection, assigning session id {}", session_id);
+                    info!("received new connection, assigning session id {}", session_id);
 
                     // wrap tcp stream in a mumble protocol framed codec
                     let codec_stream = Framed::new(tcp_stream, ServerControlCodec::new());
@@ -54,16 +55,16 @@ pub async fn run_accept_task(
         }
     }
 
-    eprintln!("sending shutdown message to control task");
+    info!("sending shutdown message to control task");
     control_send.send(ControlMessage::Shutdown).expect("control cannot be closed yet");
 
     if sessions.is_empty() {
-        eprintln!("no session tasks to wait on (#SAD!)");
+        info!("no session tasks to wait on (#SAD!)");
     } else {
-        eprintln!("waiting for all {} session tasks to stop...", sessions.len());
+        info!("waiting for all {} session tasks to stop...", sessions.len());
         use futures::future::join_all;
         join_all(sessions).await;
     }
 
-    eprintln!("accept task stopped")
+    info!("accept task stopped")
 }

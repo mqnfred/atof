@@ -1,6 +1,7 @@
 use anyhow::Result;
 use std::sync::Arc;
 use tokio::sync::Notify;
+use log::info;
 
 pub async fn serve(bind_addr: &str, stop: Arc<Notify>) -> Result<()> {
     // control/media task communications, read on for more context
@@ -11,7 +12,7 @@ pub async fn serve(bind_addr: &str, stop: Arc<Notify>) -> Result<()> {
     // bind to the provided address
     use tokio::net::TcpListener;
     let listener = TcpListener::bind(bind_addr).await?;
-    eprintln!("bound to {}", bind_addr);
+    info!("bound to {}", bind_addr);
 
     // the control task owns the routing table (connected sessions, room memberships, ...) it
     // responds to multiple kinds of events (see ControlMessage). it sends/receives all

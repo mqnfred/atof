@@ -4,6 +4,7 @@ use tokio::sync::mpsc::UnboundedSender as USender;
 use mumble_protocol::control::msgs;
 use mumble_protocol::control::ControlPacket;
 use mumble_protocol::voice::Clientbound;
+use log::debug;
 
 type SessionID = u32;
 type RoomID = u32;
@@ -57,11 +58,11 @@ impl RoutingTable {
         let orig_room_id = session.room_id;
 
         // if the session is in the routing table, it necessarily belongs to a room
-        eprintln!("session {} left room {}", session_id, orig_room_id);
+        debug!("session {} left room {}", session_id, orig_room_id);
         let orig_room = self.rooms.get_mut(&orig_room_id).expect("bad memberships");
         orig_room.members.remove(&session_id);
 
-        eprintln!("session {} joined room {}", session_id, dest_room_id);
+        debug!("session {} joined room {}", session_id, dest_room_id);
         self.rooms.entry(dest_room_id).or_insert(Room::default()).members.insert(session_id);
         session.room_id = dest_room_id;
 

@@ -8,6 +8,7 @@ use mumble_protocol::{
     control::{ControlPacket,msgs},
     voice::{Serverbound,Clientbound},
 };
+use log::{warn,info,debug};
 
 #[derive(Debug)]
 pub enum ControlMessage {
@@ -43,7 +44,7 @@ pub async fn run_control_task(
             ControlMessage::Packet(id, packet) => {
                 let res = handle_packet(id, packet, &mut unauth, &mut media_send, &mut rtbl);
                 if let Err(err) = res {
-                    eprintln!("packet handling: {}", err);
+                    warn!("packet handling: {}", err);
                 }
             },
 
@@ -56,9 +57,9 @@ pub async fn run_control_task(
             ControlMessage::RemoveSession(session_id) => {
                 if unauth.remove(&session_id).is_none() {
                     if let Err(err) = rtbl.expel_session(session_id) {
-                        eprintln!("failed to expel session {}: {}", session_id, err);
+                        warn!("failed to expel session {}: {}", session_id, err);
                     } else {
-                        eprintln!("expelled session {} from routing table", session_id);
+                        info!("expelled session {} from routing table", session_id);
                         // forward routing table to media task
                         let msg = MediaMessage::RoutingChange(rtbl.clone());
                         media_send.send(msg).expect("media cannot be closed yet");
@@ -68,16 +69,16 @@ pub async fn run_control_task(
 
             // sent by the accept task in case of graceful shutdown
             ControlMessage::Shutdown => {
-                eprintln!("stopping control task: draining all remaining messages");
+                info!("stopping control task: draining all remaining messages");
                 control_recv.close();
             },
         }
     }
 
-    eprintln!("sending shutdown message to media task");
+    info!("sending shutdown message to media task");
     media_send.send(MediaMessage::Shutdown).expect("media cannot be closed yet");
 
-    eprintln!("control task stopped")
+    info!("control task stopped")
 }
 
 use anyhow::{Error,Result};
@@ -94,11 +95,11 @@ fn handle_packet(
         if let ControlPacket::Authenticate(_auth) = packet {
             // FIXME we ultimately need a registry of saved
             // users/rooms to auth this session against
-            eprintln!("session {} authenticated itself", session_id);
+            info!("session {} authenticated itself", session_id);
 
             // modify control task routing table
             rtbl.enroll_session(session_id, unauth_session.version, unauth_session.send);
-            eprintln!("control task updated its routing table");
+            debug!("control task updated its routing table");
 
             // propagate routing table change to media task
             let msg = MediaMessage::RoutingChange(rtbl.clone());

@@ -5,6 +5,7 @@ use mumble_protocol::control::{
     ControlPacket,
     msgs::TextMessage,
 };
+use log::{info,debug};
 
 #[derive(Debug)]
 pub enum MediaMessage {
@@ -47,17 +48,17 @@ pub async fn run_media_task(mut media_recv: UReceiver<MediaMessage>) {
 
             // sent by the control task in case of routing table change
             MediaMessage::RoutingChange(rtbl) => {
-                eprintln!("media task updated its routing table");
+                debug!("media task updated its routing table");
                 routing_table = rtbl;
             },
 
             // sent by the control task in case of a graceful shutdown
             MediaMessage::Shutdown => {
-                eprintln!("stopping media task: draining all remaining messages");
+                info!("stopping media task: draining all remaining messages");
                 media_recv.close();
             },
         }
     }
 
-    eprintln!("media task stopped")
+    info!("media task stopped")
 }
