@@ -8,23 +8,23 @@ use mumble_protocol::control::{
 use log::{info,debug};
 
 #[derive(Debug)]
-pub enum MediaMessage {
+pub enum RoutingMessage {
     Voice(u32, Box<VoicePacket<Serverbound>>),
     Text(u32, Box<TextMessage>),
 
-    RoutingChange(RoutingTable),
+    Update(RoutingTable),
     Shutdown,
 }
 
-pub async fn run_media_task(mut media_recv: UReceiver<MediaMessage>) {
+pub async fn run_routing_task(mut routing_recv: UReceiver<RoutingMessage>) {
     let mut routing_table = RoutingTable::default();
 
     use tokio::stream::StreamExt;
-    while let Some(msg) = media_recv.next().await {
+    while let Some(msg) = routing_recv.next().await {
         match msg {
             // sent by session tasks
-            MediaMessage::Voice(_session_id, _voicepacket) => {},
-            MediaMessage::Text(session_id, mut text_message) => {
+            RoutingMessage::Voice(_session_id, _voicepacket) => {},
+            RoutingMessage::Text(session_id, mut text_message) => {
                 text_message.set_actor(session_id); // keep client from spoofing
 
                 // senders to all recipients of the message. any references to sessions and
@@ -47,18 +47,18 @@ pub async fn run_media_task(mut media_recv: UReceiver<MediaMessage>) {
             },
 
             // sent by the control task in case of routing table change
-            MediaMessage::RoutingChange(rtbl) => {
-                debug!("media task updated its routing table");
+            RoutingMessage::Update(rtbl) => {
+                debug!("routing task updated its routing table");
                 routing_table = rtbl;
             },
 
             // sent by the control task in case of a graceful shutdown
-            MediaMessage::Shutdown => {
-                info!("stopping media task: draining all remaining messages");
-                media_recv.close();
+            RoutingMessage::Shutdown => {
+                info!("stopping routing task: draining all remaining messages");
+                routing_recv.close();
             },
         }
     }
 
-    info!("media task stopped")
+    info!("routing task stopped")
 }

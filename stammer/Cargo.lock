@@ -553,7 +553,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "stutterd"
+name = "stammer"
 version = "0.1.0"
 dependencies = [
  "anyhow",

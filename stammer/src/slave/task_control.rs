@@ -27,10 +27,10 @@ pub struct UnAuthSession {
     pub send: USender<ControlPacket<Clientbound>>,
 }
 
-use super::task_media::MediaMessage;
+use super::task_routing::RoutingMessage;
 pub async fn run_control_task(
     mut control_recv: UReceiver<ControlMessage>,
-    mut media_send: USender<MediaMessage>,
+    mut routing_send: USender<RoutingMessage>,
 ) {
     // where sessions are stored before they authenticate
     let mut unauth: HashMap<u32, UnAuthSession> = HashMap::new();
@@ -42,7 +42,7 @@ pub async fn run_control_task(
         match msg {
             // sent by session tasks upon receiving a control packet from client
             ControlMessage::Packet(id, packet) => {
-                let res = handle_packet(id, packet, &mut unauth, &mut media_send, &mut rtbl);
+                let res = handle_packet(id, packet, &mut unauth, &mut routing_send, &mut rtbl);
                 if let Err(err) = res {
                     warn!("packet handling: {}", err);
                 }
@@ -60,9 +60,9 @@ pub async fn run_control_task(
                         warn!("failed to expel session {}: {}", session_id, err);
                     } else {
                         info!("expelled session {} from routing table", session_id);
-                        // forward routing table to media task
-                        let msg = MediaMessage::RoutingChange(rtbl.clone());
-                        media_send.send(msg).expect("media cannot be closed yet");
+                        // forward routing table to routing task
+                        let msg = RoutingMessage::Update(rtbl.clone());
+                        routing_send.send(msg).expect("routing cannot be closed yet");
                     }
                 }
             },
@@ -75,8 +75,8 @@ pub async fn run_control_task(
         }
     }
 
-    info!("sending shutdown message to media task");
-    media_send.send(MediaMessage::Shutdown).expect("media cannot be closed yet");
+    info!("sending shutdown message to routing task");
+    routing_send.send(RoutingMessage::Shutdown).expect("routing cannot be closed yet");
 
     info!("control task stopped")
 }
@@ -86,7 +86,7 @@ fn handle_packet(
     session_id: u32,
     packet: ControlPacket<Serverbound>,
     unauth: &mut HashMap<u32, UnAuthSession>,
-    media_send: &mut USender<MediaMessage>,
+    routing_send: &mut USender<RoutingMessage>,
     rtbl: &mut RoutingTable,
 ) -> Result<()> {
     if rtbl.holds_session(session_id) {
@@ -101,9 +101,9 @@ fn handle_packet(
             rtbl.enroll_session(session_id, unauth_session.version, unauth_session.send);
             debug!("control task updated its routing table");
 
-            // propagate routing table change to media task
-            let msg = MediaMessage::RoutingChange(rtbl.clone());
-            media_send.send(msg).expect("channel closes only upon later shutdown msg");
+            // propagate routing table change to routing task
+            let msg = RoutingMessage::Update(rtbl.clone());
+            routing_send.send(msg).expect("channel closes only upon later shutdown msg");
 
             // TODO send all the cryptsetup/channel states/user states/server sync to complete
             // https://mumble-protocol.readthedocs.io/en/latest/establishing_connection.html#

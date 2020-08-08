@@ -1,6 +1,6 @@
 [workspace]
 members = [
-	"stutterd",
+	"stammer",
 	"stuttertui",
 
 	"mumble-protocol",

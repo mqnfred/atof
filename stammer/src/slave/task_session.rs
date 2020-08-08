@@ -2,7 +2,7 @@ use anyhow::{Error,Result};
 use mumble_protocol::control::ControlPacket;
 use mumble_protocol::control::ServerControlCodec;
 use super::task_control::ControlMessage;
-use super::task_media::MediaMessage;
+use super::task_routing::RoutingMessage;
 use tokio::net::TcpStream;
 use tokio_util::codec::Framed;
 use tokio::sync::mpsc::{
@@ -10,13 +10,15 @@ use tokio::sync::mpsc::{
 };
 use futures::sink::SinkExt;
 use futures::stream::StreamExt;
-use log::{warn,info,debug};
+use log::{warn,info};
+use super::SlaveConfig;
 
 pub async fn run_session_task(
-    session_id: u32,
-    mut client_stream: Framed<TcpStream, ServerControlCodec>,
-    control_send: USender<ControlMessage>,
-    media_send: USender<MediaMessage>,
+    slave_cfg: SlaveConfig, // the global config of the slave task
+    session_id: u32, // the id of the session this task will babysit
+    mut client_stream: Framed<TcpStream, ServerControlCodec>, // the connection to the client
+    control_send: USender<ControlMessage>, // forward control messages there
+    routing_send: USender<RoutingMessage>, // forward voice messages there
 ) {
     // with the client, which is the first step in the session handshaking process, see:
     // https://mumble-protocol.readthedocs.io/en/latest/establishing_connection.html
@@ -46,12 +48,12 @@ pub async fn run_session_task(
     }
     info!("session {} declared itself", session_id);
 
-    // set up session timeout at 30s if no ping
-    use std::time::{Duration,Instant};
+    // setup keepalive check which will close the connection
+    // if client does not ping within our limit
+    use std::time::Instant;
     let mut last_ping = Instant::now();
-    let timeout = Duration::from_secs(30);
     use tokio::time::interval;
-    let mut keepalive_check = interval(timeout);
+    let mut keepalive_check = interval(slave_cfg.session_timeout);
 
     loop {
         use tokio::select;
@@ -81,23 +83,23 @@ pub async fn run_session_task(
                 };
 
                 match packet {
-                    // tunneled voice media packet, forward to media task
+                    // tunneled voice packet, forward to routing task
                     ControlPacket::UDPTunnel(voice_packet) => {
-                        // might fail if media task is closed (a graceful shutdown
+                        // might fail if routing task is closed (a graceful shutdown
                         // is in progress), in which case we just drop any packets
-                        let _ = media_send.send(MediaMessage::Voice(session_id, voice_packet));
+                        let _ = routing_send.send(RoutingMessage::Voice(session_id, voice_packet));
                     },
 
-                    // text messages are handled by the media task too
+                    // text messages are handled by the routing task too
                     ControlPacket::TextMessage(text_message) => {
-                        // might fail if media task is closed (a graceful shutdown
+                        // might fail if routing task is closed (a graceful shutdown
                         // is in progress), in which case we just drop any packets
-                        let _ = media_send.send(MediaMessage::Text(session_id, text_message));
+                        let _ = routing_send.send(RoutingMessage::Text(session_id, text_message));
                     },
 
                     // ping packet, just return it directly
                     // TODO ping packets should return much more data
-                    // TODO should this packet be handled by media task? that would
+                    // TODO should this packet be handled by routing task? that would
                     // enable the client to see full voice packet roundtrip picture?
                     ControlPacket::Ping(ts) => {
                         // register the ping
@@ -125,12 +127,12 @@ pub async fn run_session_task(
                 }
             },
 
-            // listen to control packets from the control and media tasks
+            // listen to control packets from the control and routing tasks
             packet = session_recv.next() => {
                 let packet = match packet { // sanitize packet
                     Some(packet) => packet,
 
-                    // this happens when both control/media tasks stop and
+                    // this happens when both control/routing tasks stop and
                     // drop their senders, this is a graceful shutdown event
                     None => { info!("session task {} stops gracefully", session_id); return },
                 };
@@ -150,7 +152,7 @@ pub async fn run_session_task(
             // check that we recently got a ping every 30s, otherwise drop
             _ = keepalive_check.next() => {
                 let since_last = last_ping.elapsed();
-                if since_last > timeout {
+                if since_last > slave_cfg.session_timeout {
                     // TODO we might want to send an error/whatever packet to the client here
                     warn!("session {} timed out ({:?} since ping)", session_id, since_last);
 

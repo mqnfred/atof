@@ -1,5 +1,5 @@
 [package]
-name = "stutterd"
+name = "stammer"
 version = "0.1.0"
 authors = ["Louis Feuvrier <mqnfred@gmail.com>"]
 edition = "2018"
@@ -9,6 +9,7 @@ edition = "2018"
 [dependencies]
 anyhow = "1.0.32"
 mumble-protocol = { path = "../mumble-protocol" }
+fern = "0.6.0"
 futures = "0.3.5"
 log = "0.4.11"
 rand = "0.7.3"
@@ -19,3 +20,11 @@ tokio-util = "0.3.1"
 panic = "abort"
 [profile.release]
 panic = "abort"
+
+[lib]
+name = "libstammer"
+path = "src/lib.rs"
+
+[[bin]]
+name = "stammerd"
+path = "src/main.rs"

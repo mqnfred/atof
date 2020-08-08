@@ -7,7 +7,9 @@ use tokio::sync::mpsc::{
 };
 use tokio_util::codec::Framed;
 use tokio::net::TcpStream;
+use log::{error,info,debug};
 
+/*
 pub fn run_connection_thread(
     addr: &str,
     connection_recver: UReceiver<ControlPacket<Serverbound>>, // from caller to server
@@ -39,15 +41,16 @@ pub fn run_connection_thread(
         }
     });
 }
+*/
 
-async fn run_connection_task(
+pub async fn run_client_task(
     mut server_stream: Framed<TcpStream, ClientControlCodec>,
     mut caller_recver: UReceiver<ControlPacket<Serverbound>>, // from caller to server
     caller_sender: USender<ControlPacket<Clientbound>>, // from server to caller
-) -> Result<()> {
+) -> Result<()> { // TODO tasks should not return results i think
     // handshake with the server (version exchange, authentication...)
     handshake(&mut server_stream).await?;
-    eprintln!("server handshake successful");
+    info!("server handshake successful");
 
     // set up ping interval at 25s
     use std::time::Duration;
@@ -65,21 +68,21 @@ async fn run_connection_task(
             // received a message from the caller, forwarding it to the server
             serverbound_msg = caller_recver.next() => match serverbound_msg {
                 // this would happen in the event of a graceful caller shutdown
-                None => { eprintln!("caller is shutting down, gracefully stopping"); break },
+                None => { info!("caller is shutting down, gracefully stopping"); break },
                 Some(msg) => server_stream.send(msg.into()).await?,
             },
 
             // received a message from the server, forwarding it to the caller
             clientbound_msg = server_stream.next() => match clientbound_msg {
                 // the server closed the connection
-                None => { eprintln!("connection closed by server, stopping"); break },
+                None => { error!("connection closed by server, stopping"); break },
 
                 // we consider all io errors terminal for now (TODO refine)
-                Some(Err(err)) => { eprintln!("connection error: {}, stopping", err); break },
+                Some(Err(err)) => { error!("connection error: {}, stopping", err); break },
 
                 // the server is answering our ping with a pong!
                 Some(Ok(ControlPacket::Ping(ping))) => {
-                    eprintln!("received pong from server: {}", ping.get_timestamp());
+                    debug!("received pong from server: {}", ping.get_timestamp());
                 },
 
                 // we forward to the caller all messages we don't understand
@@ -92,7 +95,7 @@ async fn run_connection_task(
         }
     }
 
-    eprintln!("connection task stopped");
+    info!("client task stopped");
     Ok(())
 }
 
@@ -105,7 +108,7 @@ async fn ping(server_stream: &mut Framed<TcpStream, ClientControlCodec>) -> Resu
 
     // send that shit
     use futures::sink::SinkExt;
-    eprintln!("pinging server");
+    debug!("pinging server");
     Ok(server_stream.send(ping.into()).await?)
 }
 

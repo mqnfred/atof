@@ -1,18 +1,20 @@
 use std::sync::Arc;
 use super::task_control::ControlMessage;
-use super::task_media::MediaMessage;
+use super::task_routing::RoutingMessage;
 use tokio::net::TcpListener;
 use tokio::sync::Notify;
 use tokio::sync::mpsc::UnboundedSender as USender;
 use tokio_util::codec::Framed;
 use mumble_protocol::control::ServerControlCodec;
 use log::{info,error};
+use super::SlaveConfig;
 
 pub async fn run_accept_task(
+    slave_cfg: SlaveConfig, // the global config of the slave task
     stop: Arc<Notify>, // listened on for stop signal (ctrl-c)
     mut listener: TcpListener, // listened on for new tcp streams
     control_send: USender<ControlMessage>, // hand to session tasks + notify about new sessions
-    media_send: USender<MediaMessage>, // hand to session tasks
+    routing_send: USender<RoutingMessage>, // hand to session tasks
 ) {
     // list of session tasks for future join
     // FIXME will keep growing with sessions. unclear how to purge closed sessions atm
@@ -45,10 +47,11 @@ pub async fn run_accept_task(
                     use tokio::spawn;
                     use super::task_session::run_session_task;
                     sessions.push(spawn(run_session_task(
-                        session_id, // identify session when sending to control/media
+                        slave_cfg.clone(),
+                        session_id, // identify session when sending to control/routing
                         codec_stream, // codec-ed connection to the client
                         control_send.clone(), // any control packets send there
-                        media_send.clone(), // voice/media packets will be sent there
+                        routing_send.clone(), // voice packets will be sent there
                     )));
                 },
             },

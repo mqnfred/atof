@@ -1,18 +1,24 @@
-use anyhow::Result;
 use std::sync::Arc;
 use tokio::sync::Notify;
-use log::info;
+use tokio::net::TcpListener;
+use std::time::Duration;
+use anyhow::Result;
 
-pub async fn serve(bind_addr: &str, stop: Arc<Notify>) -> Result<()> {
-    // control/media task communications, read on for more context
+#[derive(Clone)]
+pub struct SlaveConfig {
+    pub bind_addr: String,
+    pub session_timeout: Duration,
+}
+
+pub async fn run_slave_task(
+    slave_cfg: SlaveConfig,
+    listener: TcpListener,
+    stop: Arc<Notify>,
+) {
+    // control/routing task communications, read on for more context
     use tokio::sync::mpsc::unbounded_channel;
     let (control_send, control_recv) = unbounded_channel();
-    let (media_send, media_recv) = unbounded_channel();
-
-    // bind to the provided address
-    use tokio::net::TcpListener;
-    let listener = TcpListener::bind(bind_addr).await?;
-    info!("bound to {}", bind_addr);
+    let (routing_send, routing_recv) = unbounded_channel();
 
     // the control task owns the routing table (connected sessions, room memberships, ...) it
     // responds to multiple kinds of events (see ControlMessage). it sends/receives all
@@ -20,15 +26,15 @@ pub async fn serve(bind_addr: &str, stop: Arc<Notify>) -> Result<()> {
     // membership changes, it will:
     //
     //  1. modify routing table upon receiving control packets by origin session
-    //  2. send updated routing table to media task for voice/media routing purposes
+    //  2. send updated routing table to routing task for routing routing purposes
     //  3. declare new membership to all other sessions by sending them control packets
     use task_control::run_control_task;
-    let control_fut = run_control_task(control_recv, media_send.clone());
+    let control_fut = run_control_task(control_recv, routing_send.clone());
 
-    // the media task redirects voice/media packets from one source to N destinations
+    // the routing task routes voice packets from one source to N destinations
     // using a view of the world regularly updated by the control task
-    use task_media::run_media_task;
-    let media_fut = run_media_task(media_recv);
+    use task_routing::run_routing_task;
+    let routing_fut = run_routing_task(routing_recv);
 
     // this task accepts new tcp connections and:
     //
@@ -43,24 +49,32 @@ pub async fn serve(bind_addr: &str, stop: Arc<Notify>) -> Result<()> {
     //  1. perform version handshake with the client
     //  2. declare themselves to the control task
     //  3. forward any server-bound control packets to the control task
-    //  4. forward any tunneled media packets to the media task
+    //  4. forward any tunneled routing packets to the routing task
     //  5. forward any client-bound control packets to the client
     //
     // if they encounter an error, session tasks will deregister from
     // the control task themselves.
     use task_accept::run_accept_task;
-    let accept_fut = run_accept_task(stop, listener, control_send, media_send);
+    let accept_fut = run_accept_task(slave_cfg, stop, listener, control_send, routing_send);
 
     // server will run until caller notifies stop
     use tokio::join;
-    join!(control_fut, media_fut, accept_fut);
+    join!(control_fut, routing_fut, accept_fut);
+}
 
-    Ok(())
+impl SlaveConfig {
+    pub fn from_env() -> Result<Self> {
+        use std::env::var;
+        let session_timeout = var("STAMMER_SESSION_TIMEOUT_SECS").unwrap_or("30".to_owned());
+        Ok(Self {
+            bind_addr: var("STAMMER_SLAVE_BIND_ADDR").unwrap_or("localhost:8792".to_owned()),
+            session_timeout: Duration::from_secs(session_timeout.parse::<u64>()?),
+        })
+    }
 }
 
 mod task_accept;
 mod task_control;
-mod task_media;
+mod task_routing;
 mod task_session;
-
 mod routing_table;
