@@ -1,0 +1,38 @@
+// vim: tw=0
+
+digraph stammer {
+	// server-side tasks
+	server_main [style=filled, fillcolor=grey];
+	accept_task [style=filled, fillcolor=grey];
+	session_task [style=filled, fillcolor=grey];
+	control_task [style=filled, fillcolor=grey];
+	routing_task [style=filled, fillcolor=grey];
+
+	// client-side tasks
+	client_main [shape=rectangle, style=filled, fillcolor=grey];
+	connection_task [shape=rectangle, style=filled, fillcolor=grey];
+	media_task [shape=rectangle];
+	ui_task [shape=rectangle];
+
+	server_main -> {accept_task control_task routing_task} [label="creates"];
+	accept_task -> session_task [label="creates"];
+
+	accept_task -> control_task [color=green, label="session handlers"];
+	control_task -> routing_task [color=purple, label="routing tables"];
+
+	session_task -> control_task [color=red, label="ctrl packets"];
+	control_task -> session_task [color=red, label="ctrl packets"];
+
+	session_task -> routing_task [color=yellow, label="media packets"];
+	routing_task -> session_task [color=yellow, label="media packets"];
+
+	client_main -> {connection_task media_task ui_task} [label="creates"];
+	session_task -> connection_task [color=orange, label="ctrl+media packets"];
+	connection_task -> session_task [color=orange, label="ctrl+media packets"];
+
+	connection_task -> ui_task [color=red, label="ctrl packets"];
+	ui_task -> connection_task [color=red, label="ctrl packets"];
+
+	connection_task -> media_task [color=yellow, label="media packets"];
+	media_task -> connection_task [color=yellow, label="media packets"];
+}

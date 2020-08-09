@@ -6,7 +6,8 @@ Welcome to the jungle
 
 stammer is the equivalent of murmur. it routes clients' media and addresses
 control packets. the crate also contains the implementation of the client task
-that is meant to be ran on the client-side.
+that is meant to be ran on the client-side and interacts with stammer's session
+task.
 
 ## stutter
 
