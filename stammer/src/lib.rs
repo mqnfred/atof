@@ -1,5 +1,14 @@
 mod client;
-pub use client::run_client_task;
+pub use client::{
+    ClientConfig,
+    run_client_task,
+    ClientMessage,
+    MediaMessage,
+    UIMessage,
+};
 
 mod slave;
-pub use slave::{SlaveConfig,run_slave_task};
+pub use slave::{
+    SlaveConfig,
+    run_slave_task,
+};

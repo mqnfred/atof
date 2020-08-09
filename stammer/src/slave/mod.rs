@@ -3,6 +3,7 @@ use tokio::sync::Notify;
 use tokio::net::TcpListener;
 use std::time::Duration;
 use anyhow::Result;
+use log::info;
 
 #[derive(Clone)]
 pub struct SlaveConfig {
@@ -15,6 +16,8 @@ pub async fn run_slave_task(
     listener: TcpListener,
     stop: Arc<Notify>,
 ) {
+    info!("starting slave...");
+
     // control/routing task communications, read on for more context
     use tokio::sync::mpsc::unbounded_channel;
     let (control_send, control_recv) = unbounded_channel();
@@ -60,6 +63,7 @@ pub async fn run_slave_task(
     // server will run until caller notifies stop
     use tokio::join;
     join!(control_fut, routing_fut, accept_fut);
+    info!("slave has stopped");
 }
 
 impl SlaveConfig {

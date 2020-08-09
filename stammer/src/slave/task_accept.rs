@@ -6,7 +6,7 @@ use tokio::sync::Notify;
 use tokio::sync::mpsc::UnboundedSender as USender;
 use tokio_util::codec::Framed;
 use mumble_protocol::control::ServerControlCodec;
-use log::{info,error};
+use log::{trace,info,error};
 use super::SlaveConfig;
 
 pub async fn run_accept_task(
@@ -16,6 +16,7 @@ pub async fn run_accept_task(
     control_send: USender<ControlMessage>, // hand to session tasks + notify about new sessions
     routing_send: USender<RoutingMessage>, // hand to session tasks
 ) {
+    trace!("started accept task...");
     // list of session tasks for future join
     // FIXME will keep growing with sessions. unclear how to purge closed sessions atm
     let mut sessions = vec![];
@@ -58,16 +59,16 @@ pub async fn run_accept_task(
         }
     }
 
-    info!("sending shutdown message to control task");
+    trace!("sending shutdown message to control task");
     control_send.send(ControlMessage::Shutdown).expect("control cannot be closed yet");
 
     if sessions.is_empty() {
-        info!("no session tasks to wait on (#SAD!)");
+        trace!("no session tasks to wait on (#SAD!)");
     } else {
-        info!("waiting for all {} session tasks to stop...", sessions.len());
+        trace!("waiting for all {} session tasks to stop...", sessions.len());
         use futures::future::join_all;
         join_all(sessions).await;
     }
 
-    info!("accept task stopped")
+    trace!("accept task stopped")
 }

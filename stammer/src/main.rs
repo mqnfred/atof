@@ -1,11 +1,11 @@
 use anyhow::Result;
 use std::sync::Arc;
 use tokio::sync::Notify;
-use log::{LevelFilter,warn,error,info};
+use log::{warn,error,info};
 
 #[tokio::main]
 async fn main() {
-    if let Err(err) = setup_logging() {
+    if let Err(err) = setup_logging().await {
         eprintln!("failed to setup logging: {}", err);
     } else if let Err(err) = run_slave().await {
         error!("error while running slave: {}", err);
@@ -14,7 +14,7 @@ async fn main() {
 
 async fn run_slave() -> Result<()> {
     // load the slave config and bind on tcp
-    use libstammer::SlaveConfig;
+    use stammer::SlaveConfig;
     use tokio::net::TcpListener;
     let slave_cfg = SlaveConfig::from_env()?;
     let listener = TcpListener::bind(&slave_cfg.bind_addr).await?;
@@ -25,7 +25,7 @@ async fn run_slave() -> Result<()> {
 
     // kickstart the slave task
     use tokio::join;
-    use libstammer::run_slave_task;
+    use stammer::run_slave_task;
     join!(cancel_fut, run_slave_task(slave_cfg, listener, stop));
 
     Ok(())
@@ -41,7 +41,11 @@ async fn handle_ctrl_c(stop: Arc<Notify>) {
     }
 }
 
-fn setup_logging() -> Result<()> {
+async fn setup_logging() -> Result<()> {
+    use std::io::stderr;
     use fern::Dispatch;
-    Dispatch::new().level(LevelFilter::Debug).apply()
+    use log::LevelFilter;
+    Dispatch::new().level(LevelFilter::Trace).chain(stderr()).apply()?;
+    info!("logging to stderr setup successfully");
+    Ok(())
 }

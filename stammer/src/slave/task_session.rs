@@ -10,7 +10,7 @@ use tokio::sync::mpsc::{
 };
 use futures::sink::SinkExt;
 use futures::stream::StreamExt;
-use log::{warn,info};
+use log::{trace,warn,info};
 use super::SlaveConfig;
 
 pub async fn run_session_task(
@@ -20,6 +20,8 @@ pub async fn run_session_task(
     control_send: USender<ControlMessage>, // forward control messages there
     routing_send: USender<RoutingMessage>, // forward voice messages there
 ) {
+    trace!("session task started for {}...", session_id);
+
     // with the client, which is the first step in the session handshaking process, see:
     // https://mumble-protocol.readthedocs.io/en/latest/establishing_connection.html
     // TODO: join client/server implems and reuse version handshake as a lib exchange versions
@@ -43,10 +45,11 @@ pub async fn run_session_task(
     use super::task_control::UnAuthSession;
     let msg = ControlMessage::AddSession(session_id, UnAuthSession{version, send: session_send});
     if control_send.send(msg).is_err() { // control task is closed, graceful shutdown in progress
-        warn!("session task {} stopped (graceful shutdown in progress)", session_id);
+        warn!("session task {} denied (graceful shutdown in progress)", session_id);
+        trace!("session task {} stopped", session_id);
         return
     }
-    info!("session {} declared itself", session_id);
+    info!("session {} successfully declared itself", session_id);
 
     // setup keepalive check which will close the connection
     // if client does not ping within our limit
@@ -165,7 +168,7 @@ pub async fn run_session_task(
         }
     }
 
-    info!("session task {} stopped", session_id);
+    trace!("session task {} stopped", session_id);
 }
 
 use mumble_protocol::control::msgs;

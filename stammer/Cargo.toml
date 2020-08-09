@@ -22,7 +22,7 @@ panic = "abort"
 panic = "abort"
 
 [lib]
-name = "libstammer"
+name = "stammer"
 path = "src/lib.rs"
 
 [[bin]]

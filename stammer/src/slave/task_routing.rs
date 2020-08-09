@@ -5,7 +5,7 @@ use mumble_protocol::control::{
     ControlPacket,
     msgs::TextMessage,
 };
-use log::{info,debug};
+use log::{trace,debug};
 
 #[derive(Debug)]
 pub enum RoutingMessage {
@@ -54,11 +54,11 @@ pub async fn run_routing_task(mut routing_recv: UReceiver<RoutingMessage>) {
 
             // sent by the control task in case of a graceful shutdown
             RoutingMessage::Shutdown => {
-                info!("stopping routing task: draining all remaining messages");
+                trace!("stopping routing task: draining all remaining messages");
                 routing_recv.close();
             },
         }
     }
 
-    info!("routing task stopped")
+    trace!("routing task stopped")
 }

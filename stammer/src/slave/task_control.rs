@@ -8,7 +8,7 @@ use mumble_protocol::{
     control::{ControlPacket,msgs},
     voice::{Serverbound,Clientbound},
 };
-use log::{warn,info,debug};
+use log::{trace,warn,info,debug};
 
 #[derive(Debug)]
 pub enum ControlMessage {
@@ -32,6 +32,7 @@ pub async fn run_control_task(
     mut control_recv: UReceiver<ControlMessage>,
     mut routing_send: USender<RoutingMessage>,
 ) {
+    trace!("started control task...");
     // where sessions are stored before they authenticate
     let mut unauth: HashMap<u32, UnAuthSession> = HashMap::new();
     // once authenticated, sessions are routable
@@ -69,16 +70,16 @@ pub async fn run_control_task(
 
             // sent by the accept task in case of graceful shutdown
             ControlMessage::Shutdown => {
-                info!("stopping control task: draining all remaining messages");
+                trace!("stopping control task: draining all remaining messages");
                 control_recv.close();
             },
         }
     }
 
-    info!("sending shutdown message to routing task");
+    trace!("sending shutdown message to routing task");
     routing_send.send(RoutingMessage::Shutdown).expect("routing cannot be closed yet");
 
-    info!("control task stopped")
+    trace!("control task stopped")
 }
 
 use anyhow::{Error,Result};

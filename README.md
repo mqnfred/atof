@@ -2,18 +2,14 @@
 
 Welcome to the jungle
 
-## Test it out
+## stammer
 
-```
-cargo run --package stutterd localhost:5001 >/tmp/stutterd.log 2>&1 &
-cargo run --package stuttertui localhost:5001
-```
+stammer is the equivalent of murmur. it routes clients' media and addresses
+control packets. the crate also contains the implementation of the client task
+that is meant to be ran on the client-side.
 
-## Coding style
+## stutter
 
-Logging levels:
-
- - debug: feel-good stuff we want to read about
- - info: run-of-the-mill changes in state we want to know about
- - warn: something went wrong, but this is not terminal to the program
- - error: something went really wrong, the program will stop now
+a prototype implementation of a client of stammer. it currently does not have
+any UI or anything. it kickstarts the stammer client task and a stillborn media
+task with some early attempts at master audio with rust

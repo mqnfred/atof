@@ -1,5 +1,5 @@
 [package]
-name = "stuttertui"
+name = "stutter"
 version = "0.1.0"
 authors = ["Louis Feuvrier <mqnfred@gmail.com>"]
 edition = "2018"
@@ -9,6 +9,10 @@ edition = "2018"
 [dependencies]
 anyhow = "1.0.32"
 futures = "0.3.5"
+fern = "0.6.0"
+log = "0.4.11"
+cpal = "0.12.1"
+stammer = { path = "../stammer" }
 mumble-protocol = { path = "../mumble-protocol" }
 tokio = { version = "0.2.22", features = ["full"] }
 tokio-util = "0.3.1"

@@ -1,13 +1,14 @@
 use anyhow::Result;
 use mumble_protocol::control::{ClientControlCodec,ControlPacket,msgs};
-use mumble_protocol::voice::{Clientbound,Serverbound};
+use mumble_protocol::voice::{VoicePacket,Clientbound,Serverbound};
 use tokio::sync::mpsc::{
     UnboundedReceiver as UReceiver,
     UnboundedSender as USender,
 };
 use tokio_util::codec::Framed;
 use tokio::net::TcpStream;
-use log::{error,info,debug};
+use log::{error,trace,info,debug};
+use std::time::Duration;
 
 /*
 pub fn run_connection_thread(
@@ -43,19 +44,39 @@ pub fn run_connection_thread(
 }
 */
 
+pub struct ClientConfig {
+    pub connect_addr: String,
+    pub session_timeout: Duration,
+}
+
+pub enum ClientMessage {
+    Voice(VoicePacket<Serverbound>),
+    Control(ControlPacket<Serverbound>),
+}
+
+pub enum MediaMessage {
+    Voice(VoicePacket<Clientbound>),
+}
+
+pub enum UIMessage {
+    Control(ControlPacket<Clientbound>),
+}
+
 pub async fn run_client_task(
-    mut server_stream: Framed<TcpStream, ClientControlCodec>,
-    mut caller_recver: UReceiver<ControlPacket<Serverbound>>, // from caller to server
-    caller_sender: USender<ControlPacket<Clientbound>>, // from server to caller
-) -> Result<()> { // TODO tasks should not return results i think
+    client_cfg: ClientConfig,
+    mut server_stream: Framed<TcpStream, ClientControlCodec>, // send/receive packets from server
+    mut client_recver: UReceiver<ClientMessage>, // all messages destined to the client/server
+    media_sender: USender<MediaMessage>, // all received media messages go there
+    ui_sender: USender<UIMessage>, // messages from the UI to the server
+) -> Result<()> {
     // handshake with the server (version exchange, authentication...)
     handshake(&mut server_stream).await?;
     info!("server handshake successful");
 
-    // set up ping interval at 25s
-    use std::time::Duration;
+    // set up ping interval at half the session timeout
     use tokio::time::interval;
-    let mut keepalive = interval(Duration::from_secs(25));
+    let ping_interval = client_cfg.session_timeout / 2;
+    let mut keepalive = interval(ping_interval);
 
     loop {
         use tokio::select;
@@ -65,31 +86,50 @@ pub async fn run_client_task(
             // reminder to send a ping to the server
             _ = keepalive.next() => ping(&mut server_stream).await?,
 
-            // received a message from the caller, forwarding it to the server
-            serverbound_msg = caller_recver.next() => match serverbound_msg {
-                // this would happen in the event of a graceful caller shutdown
-                None => { info!("caller is shutting down, gracefully stopping"); break },
-                Some(msg) => server_stream.send(msg.into()).await?,
+            // messages from media or ui tasks are handled here
+            client_msg = client_recver.next() => match client_msg {
+                // media and ui tasks are goners, we are done here
+                None => { trace!("other tasks are shutting down, gracefully stopping"); break },
+
+                // received a voice message from the media task
+                Some(ClientMessage::Voice(voice_packet)) => {
+                    let msg = ControlPacket::UDPTunnel(Box::new(voice_packet));
+                    // we consider io errors terminal at this time (TODO refine)
+                    server_stream.send(msg.into()).await?;
+                },
+
+                // control message from the ui, we forward this to the server right away
+                Some(ClientMessage::Control(packet)) => {
+                    // we consider io errors terminal at this time (TODO refine)
+                    server_stream.send(packet.into()).await?;
+                },
             },
 
-            // received a message from the server, forwarding it to the caller
-            clientbound_msg = server_stream.next() => match clientbound_msg {
+            server_msg = server_stream.next() => match server_msg {
                 // the server closed the connection
                 None => { error!("connection closed by server, stopping"); break },
 
                 // we consider all io errors terminal for now (TODO refine)
                 Some(Err(err)) => { error!("connection error: {}, stopping", err); break },
 
+                // the server is sending us voice data, forward to the media task
+                Some(Ok(ControlPacket::UDPTunnel(voice_packet))) => {
+                    let msg = MediaMessage::Voice(*voice_packet);
+                    // this might happen if the caller has started shutting down when we receive
+                    // this packet. it's not accepting any new packets, so we just drop it.
+                    let _ = media_sender.send(msg);
+                },
+
                 // the server is answering our ping with a pong!
                 Some(Ok(ControlPacket::Ping(ping))) => {
                     debug!("received pong from server: {}", ping.get_timestamp());
                 },
 
-                // we forward to the caller all messages we don't understand
+                // we forward to the ui all other control messages
                 Some(Ok(packet)) => {
                     // this might happen if the caller has started shutting down when we receive
                     // this packet. it's not accepting any new packets, so we just drop it.
-                    let _ = caller_sender.send(packet);
+                    let _ = ui_sender.send(UIMessage::Control(packet));
                 },
             },
         }
