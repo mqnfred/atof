@@ -44,12 +44,12 @@ pub fn run_connection_thread(
 }
 */
 
-pub struct ClientConfig {
+pub struct ConnectionConfig {
     pub connect_addr: String,
     pub session_timeout: Duration,
 }
 
-pub enum ClientMessage {
+pub enum ConnectionMessage {
     Voice(VoicePacket<Serverbound>),
     Control(ControlPacket<Serverbound>),
 }
@@ -62,10 +62,10 @@ pub enum UIMessage {
     Control(ControlPacket<Clientbound>),
 }
 
-pub async fn run_client_task(
-    client_cfg: ClientConfig,
+pub async fn run_connection_task(
+    connection_cfg: ConnectionConfig,
     mut server_stream: Framed<TcpStream, ClientControlCodec>, // send/receive packets from server
-    mut client_recver: UReceiver<ClientMessage>, // all messages destined to the client/server
+    mut connection_recver: UReceiver<ClientMessage>, // all messages destined to the client/server
     media_sender: USender<MediaMessage>, // all received media messages go there
     ui_sender: USender<UIMessage>, // messages from the UI to the server
 ) -> Result<()> {
@@ -75,7 +75,7 @@ pub async fn run_client_task(
 
     // set up ping interval at half the session timeout
     use tokio::time::interval;
-    let ping_interval = client_cfg.session_timeout / 2;
+    let ping_interval = connection_cfg.session_timeout / 2;
     let mut keepalive = interval(ping_interval);
 
     loop {
@@ -135,7 +135,7 @@ pub async fn run_client_task(
         }
     }
 
-    info!("client task stopped");
+    info!("connection task stopped");
     Ok(())
 }
 

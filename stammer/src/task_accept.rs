@@ -7,16 +7,16 @@ use tokio::sync::mpsc::UnboundedSender as USender;
 use tokio_util::codec::Framed;
 use mumble_protocol::control::ServerControlCodec;
 use log::{trace,info,error};
-use super::SlaveConfig;
+use super::StammerConfig;
 
 pub async fn run_accept_task(
-    slave_cfg: SlaveConfig, // the global config of the slave task
+    stammer_cfg: StammerConfig, // the global config of the stammer task
     stop: Arc<Notify>, // listened on for stop signal (ctrl-c)
     mut listener: TcpListener, // listened on for new tcp streams
     control_send: USender<ControlMessage>, // hand to session tasks + notify about new sessions
     routing_send: USender<RoutingMessage>, // hand to session tasks
 ) {
-    trace!("started accept task...");
+    trace!("accept task started");
     // list of session tasks for future join
     // FIXME will keep growing with sessions. unclear how to purge closed sessions atm
     let mut sessions = vec![];
@@ -48,7 +48,7 @@ pub async fn run_accept_task(
                     use tokio::spawn;
                     use super::task_session::run_session_task;
                     sessions.push(spawn(run_session_task(
-                        slave_cfg.clone(),
+                        stammer_cfg.clone(),
                         session_id, // identify session when sending to control/routing
                         codec_stream, // codec-ed connection to the client
                         control_send.clone(), // any control packets send there

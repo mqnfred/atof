@@ -18,3 +18,11 @@ tokio = { version = "0.2.22", features = ["full"] }
 tokio-util = "0.3.1"
 tui = "0.10.0"
 termion = "1.5"
+
+[lib]
+name = "stutter"
+path = "src/lib.rs"
+
+[[bin]]
+name = "stutter"
+path = "src/main.rs"

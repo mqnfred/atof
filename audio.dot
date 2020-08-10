@@ -1,0 +1,24 @@
+// vim: tw=0
+
+digraph audio {
+	media_task;
+	connection_task;
+	audio_decoder_task;
+	audio_encoder_task;
+	audio_muxer_task;
+	audio_io_task;
+
+	media_task -> {audio_encoder_task audio_decoder_task audio_muxer_task audio_io_task} [label="creates"];
+
+	connection_task -> audio_decoder_task [color=orange, label="opus voice packets"];
+	audio_decoder_task -> audio_muxer_task [color=yellow, label="pcm from src 0"];
+	audio_decoder_task -> audio_muxer_task [color=red, label="pcm from src 1"];
+	audio_muxer_task -> audio_io_task [color=orange, label="pcm from src 0+1"];
+	audio_io_task -> os_audio_driver [color=orange, label="pcm stream"];
+	os_audio_driver -> audio_io_task [color=blue, label="microphone pcm stream"];
+	audio_io_task -> audio_encoder_task [color=blue, label="microphone pcm stream"];
+	audio_encoder_task -> connection_task [color=blue, label="opus voice packets"];
+
+	os_audio_driver -> speakers;
+	microphone -> os_audio_driver;
+}

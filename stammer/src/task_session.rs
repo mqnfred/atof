@@ -11,16 +11,16 @@ use tokio::sync::mpsc::{
 use futures::sink::SinkExt;
 use futures::stream::StreamExt;
 use log::{trace,warn,info};
-use super::SlaveConfig;
+use super::StammerConfig;
 
 pub async fn run_session_task(
-    slave_cfg: SlaveConfig, // the global config of the slave task
+    stammer_cfg: StammerConfig, // the global config of the stammer task
     session_id: u32, // the id of the session this task will babysit
     mut client_stream: Framed<TcpStream, ServerControlCodec>, // the connection to the client
     control_send: USender<ControlMessage>, // forward control messages there
     routing_send: USender<RoutingMessage>, // forward voice messages there
 ) {
-    trace!("session task started for {}...", session_id);
+    trace!("session task started for {}", session_id);
 
     // with the client, which is the first step in the session handshaking process, see:
     // https://mumble-protocol.readthedocs.io/en/latest/establishing_connection.html
@@ -56,7 +56,7 @@ pub async fn run_session_task(
     use std::time::Instant;
     let mut last_ping = Instant::now();
     use tokio::time::interval;
-    let mut keepalive_check = interval(slave_cfg.session_timeout);
+    let mut keepalive_check = interval(stammer_cfg.session_timeout);
 
     loop {
         use tokio::select;
@@ -155,7 +155,7 @@ pub async fn run_session_task(
             // check that we recently got a ping every 30s, otherwise drop
             _ = keepalive_check.next() => {
                 let since_last = last_ping.elapsed();
-                if since_last > slave_cfg.session_timeout {
+                if since_last > stammer_cfg.session_timeout {
                     // TODO we might want to send an error/whatever packet to the client here
                     warn!("session {} timed out ({:?} since ping)", session_id, since_last);
 

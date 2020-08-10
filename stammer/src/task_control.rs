@@ -32,7 +32,7 @@ pub async fn run_control_task(
     mut control_recv: UReceiver<ControlMessage>,
     mut routing_send: USender<RoutingMessage>,
 ) {
-    trace!("started control task...");
+    trace!("control task started");
     // where sessions are stored before they authenticate
     let mut unauth: HashMap<u32, UnAuthSession> = HashMap::new();
     // once authenticated, sessions are routable

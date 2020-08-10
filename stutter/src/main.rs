@@ -14,28 +14,20 @@ async fn main() {
     let (media_sender, media_recver) = unbounded_channel();
     let (ui_sender, ui_recver) = unbounded_channel();
 
-    use stammer::ClientConfig;
     use std::time::Duration;
-    let client_cfg = ClientConfig{
-        connect_addr: "localhost:8792".to_owned(),
+    use stutter::StutterConfig;
+    let client_cfg = StutterConfig{
+        addr: "localhost:8792".to_owned(),
         session_timeout: Duration::from_secs(30),
     };
 
     use tokio::net::TcpStream;
     use tokio_util::codec::Framed;
-    let server_stream = TcpStream::connect(&client_cfg.connect_addr).await.unwrap(); // TODO
-    let server_stream = Framed::new(server_stream, ClientControlCodec::new());
+    let server_stream = TcpStream::connect(&stutter_cfg.addr).await.unwrap(); // TODO
 
-    use tokio::join;
-    use task_media::run_media_task;
-    use stammer::run_client_task;
-    join!(
-        run_media_task(client_sender, media_recver),
-        run_client_task(client_cfg, server_stream, client_recver, media_sender, ui_sender),
-    );
+    use stutter::run_stutter_task;
+    run_stutter_task(stutter_cfg, server_stream)
 }
-
-mod task_media;
 
 async fn setup_logging() -> Result<()> {
     use std::io::stderr;

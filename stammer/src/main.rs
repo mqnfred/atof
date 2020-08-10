@@ -7,26 +7,26 @@ use log::{warn,error,info};
 async fn main() {
     if let Err(err) = setup_logging().await {
         eprintln!("failed to setup logging: {}", err);
-    } else if let Err(err) = run_slave().await {
-        error!("error while running slave: {}", err);
+    } else if let Err(err) = run_stammer().await {
+        error!("error while running stammer: {}", err);
     }
 }
 
-async fn run_slave() -> Result<()> {
-    // load the slave config and bind on tcp
-    use stammer::SlaveConfig;
+async fn run_stammer() -> Result<()> {
+    // load the stammer config and bind on tcp
+    use stammer::StammerConfig;
     use tokio::net::TcpListener;
-    let slave_cfg = SlaveConfig::from_env()?;
-    let listener = TcpListener::bind(&slave_cfg.bind_addr).await?;
+    let stammer_cfg = StammerConfig::from_env()?;
+    let listener = TcpListener::bind(&stammer_cfg.bind_addr).await?;
 
-    // enable stopping the slave using ctrl-c
+    // enable stopping stammer using ctrl-c
     let stop = Arc::new(Notify::new());
     let cancel_fut = handle_ctrl_c(stop.clone());
 
-    // kickstart the slave task
+    // kickstart the stammer task
     use tokio::join;
-    use stammer::run_slave_task;
-    join!(cancel_fut, run_slave_task(slave_cfg, listener, stop));
+    use stammer::run_stammer_task;
+    join!(cancel_fut, run_stammer_task(stammer_cfg, listener, stop));
 
     Ok(())
 }

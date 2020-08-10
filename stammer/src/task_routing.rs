@@ -17,6 +17,7 @@ pub enum RoutingMessage {
 }
 
 pub async fn run_routing_task(mut routing_recv: UReceiver<RoutingMessage>) {
+    trace!("routing task started");
     let mut routing_table = RoutingTable::default();
 
     use tokio::stream::StreamExt;
