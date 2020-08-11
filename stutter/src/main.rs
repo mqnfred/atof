@@ -1,28 +1,26 @@
 use anyhow::Result;
-use mumble_protocol::control::{ClientControlCodec,ControlPacket,msgs};
-use mumble_protocol::voice::{VoicePacket,Clientbound,Serverbound};
-use tokio::sync::mpsc::{
-    UnboundedReceiver as UReceiver,
-    UnboundedSender as USender,
-};
+use log::error;
 
 #[tokio::main]
 async fn main() {
-    setup_logging().await.unwrap();
+    if let Err(err) = setup_logging().await {
+        eprintln!("failed to setup logging: {}", err);
+    } else if let Err(err) = run_stutter().await {
+        error!("error while running stutter: {}", err);
+    }
+}
 
-    use std::time::Duration;
+async fn run_stutter() -> Result<()> {
     use stutter::StutterConfig;
-    let stutter_cfg = StutterConfig{
-        addr: "localhost:8792".to_owned(),
-        session_timeout: Duration::from_secs(30),
-    };
+    let stutter_cfg = StutterConfig::from_env()?;
 
     use tokio::net::TcpStream;
-    use tokio_util::codec::Framed;
-    let server_stream = TcpStream::connect(&stutter_cfg.addr).await.unwrap(); // TODO
+    let server_stream = TcpStream::connect(&stutter_cfg.addr).await?;
 
     use stutter::run_stutter_task;
     run_stutter_task(stutter_cfg, server_stream).await;
+
+    Ok(())
 }
 
 async fn setup_logging() -> Result<()> {
