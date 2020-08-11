@@ -20,8 +20,8 @@ pub async fn run_stammer_task(
 
     // control/routing task communications, read on for more context
     use tokio::sync::mpsc::unbounded_channel;
-    let (control_send, control_recv) = unbounded_channel();
-    let (routing_send, routing_recv) = unbounded_channel();
+    let (control_sender, control_recver) = unbounded_channel();
+    let (routing_sender, routing_recver) = unbounded_channel();
 
     // the control task owns the routing table (connected sessions, room memberships, ...) it
     // responds to multiple kinds of events (see ControlMessage). it sends/receives all
@@ -32,12 +32,12 @@ pub async fn run_stammer_task(
     //  2. send updated routing table to routing task for routing routing purposes
     //  3. declare new membership to all other sessions by sending them control packets
     use task_control::run_control_task;
-    let control_fut = run_control_task(control_recv, routing_send.clone());
+    let control_fut = run_control_task(control_recver, routing_sender.clone());
 
     // the routing task routes voice packets from one source to N destinations
     // using a view of the world regularly updated by the control task
     use task_routing::run_routing_task;
-    let routing_fut = run_routing_task(routing_recv);
+    let routing_fut = run_routing_task(routing_recver);
 
     // this task accepts new tcp connections and:
     //
@@ -58,7 +58,7 @@ pub async fn run_stammer_task(
     // if they encounter an error, session tasks will deregister from
     // the control task themselves.
     use task_accept::run_accept_task;
-    let accept_fut = run_accept_task(stammer_cfg, stop, listener, control_send, routing_send);
+    let accept_fut = run_accept_task(stammer_cfg, stop, listener, control_sender, routing_sender);
 
     // server will run until caller notifies stop
     use tokio::join;

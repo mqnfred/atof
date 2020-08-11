@@ -1,6 +1,6 @@
 use anyhow::Result;
 use mumble_protocol::control::{ClientControlCodec,ControlPacket,msgs};
-use mumble_protocol::voice::{VoicePacket,Clientbound,Serverbound};
+use mumble_protocol::voice::{VoicePacket,Serverbound};
 use tokio::sync::mpsc::{
     UnboundedReceiver as UReceiver,
     UnboundedSender as USender,
@@ -8,66 +8,20 @@ use tokio::sync::mpsc::{
 use tokio_util::codec::Framed;
 use tokio::net::TcpStream;
 use log::{error,trace,info,debug};
-use std::time::Duration;
-
-/*
-pub fn run_connection_thread(
-    addr: &str,
-    connection_recver: UReceiver<ControlPacket<Serverbound>>, // from caller to server
-    ui_sender: USender<ControlPacket<Clientbound>>, // from server to caller
-) {
-    // we need to spawn a tokio runtime as the connection task is asynchronous
-    use tokio::runtime::Runtime;
-    let mut rt = match Runtime::new() {
-        Err(err) => { eprintln!("failed to start runtime: {}", err); return },
-        Ok(rt) => rt,
-    };
-
-    // connect to the server and spin up our connection task
-    rt.block_on(async move {
-        // connect to server and wrap connection in mumble control codec
-        let server_stream = match TcpStream::connect(&addr).await {
-            Ok(server_stream) => Framed::new(server_stream, ClientControlCodec::new()),
-            Err(err) => { eprintln!("failed to establish connection: {}", err); return },
-        };
-        eprintln!("established connection to server");
-
-        // the connection_task babysits the connection, it:
-        //
-        //  1. sends and receives server pings
-        //  2. forwards any server-bound packets to the server (from the ui thread)
-        //  3. forwards any client-bound packets to the ui thread (from the caller)
-        if let Err(err) = run_connection_task(server_stream, connection_recver, ui_sender).await {
-            eprintln!("connection error: {}", err);
-        }
-    });
-}
-*/
-
-pub struct ConnectionConfig {
-    pub connect_addr: String,
-    pub session_timeout: Duration,
-}
 
 pub enum ConnectionMessage {
     Voice(VoicePacket<Serverbound>),
     Control(ControlPacket<Serverbound>),
 }
 
-pub enum MediaMessage {
-    Voice(VoicePacket<Clientbound>),
-}
-
-pub enum UIMessage {
-    Control(ControlPacket<Clientbound>),
-}
+use super::StutterConfig;
+use super::task_audio_codec::AudioCodecMessage;
 
 pub async fn run_connection_task(
-    connection_cfg: ConnectionConfig,
-    mut server_stream: Framed<TcpStream, ClientControlCodec>, // send/receive packets from server
-    mut connection_recver: UReceiver<ClientMessage>, // all messages destined to the client/server
-    media_sender: USender<MediaMessage>, // all received media messages go there
-    ui_sender: USender<UIMessage>, // messages from the UI to the server
+    stutter_cfg: StutterConfig,
+    mut server_stream: Framed<TcpStream, ClientControlCodec>,
+    mut connection_recver: UReceiver<ConnectionMessage>,
+    audio_codec_sender: USender<AudioCodecMessage>,
 ) -> Result<()> {
     // handshake with the server (version exchange, authentication...)
     handshake(&mut server_stream).await?;
@@ -75,7 +29,7 @@ pub async fn run_connection_task(
 
     // set up ping interval at half the session timeout
     use tokio::time::interval;
-    let ping_interval = connection_cfg.session_timeout / 2;
+    let ping_interval = stutter_cfg.session_timeout / 2;
     let mut keepalive = interval(ping_interval);
 
     loop {
@@ -86,20 +40,23 @@ pub async fn run_connection_task(
             // reminder to send a ping to the server
             _ = keepalive.next() => ping(&mut server_stream).await?,
 
-            // messages from media or ui tasks are handled here
-            client_msg = client_recver.next() => match client_msg {
-                // media and ui tasks are goners, we are done here
+            // messages from audio codec or ui tasks are handled here
+            connection_msg = connection_recver.next() => match connection_msg {
+                // audio codec and ui tasks are goners, we are done here
                 None => { trace!("other tasks are shutting down, gracefully stopping"); break },
 
-                // received a voice message from the media task
-                Some(ClientMessage::Voice(voice_packet)) => {
+                // received a voice message from the audio codec task
+                Some(ConnectionMessage::Voice(voice_packet)) => {
                     let msg = ControlPacket::UDPTunnel(Box::new(voice_packet));
                     // we consider io errors terminal at this time (TODO refine)
-                    server_stream.send(msg.into()).await?;
+                    if let Err(err) = server_stream.send(msg.into()).await {
+                        error!("encountered connection error: {}", err);
+                        break
+                    }
                 },
 
                 // control message from the ui, we forward this to the server right away
-                Some(ClientMessage::Control(packet)) => {
+                Some(ConnectionMessage::Control(packet)) => {
                     // we consider io errors terminal at this time (TODO refine)
                     server_stream.send(packet.into()).await?;
                 },
@@ -112,12 +69,12 @@ pub async fn run_connection_task(
                 // we consider all io errors terminal for now (TODO refine)
                 Some(Err(err)) => { error!("connection error: {}, stopping", err); break },
 
-                // the server is sending us voice data, forward to the media task
+                // the server is sending us voice data, forward to the audio codec task
                 Some(Ok(ControlPacket::UDPTunnel(voice_packet))) => {
-                    let msg = MediaMessage::Voice(*voice_packet);
+                    let msg = AudioCodecMessage::Inbound(*voice_packet);
                     // this might happen if the caller has started shutting down when we receive
                     // this packet. it's not accepting any new packets, so we just drop it.
-                    let _ = media_sender.send(msg);
+                    let _ = audio_codec_sender.send(msg);
                 },
 
                 // the server is answering our ping with a pong!
@@ -126,10 +83,10 @@ pub async fn run_connection_task(
                 },
 
                 // we forward to the ui all other control messages
-                Some(Ok(packet)) => {
+                Some(Ok(_packet)) => {
                     // this might happen if the caller has started shutting down when we receive
                     // this packet. it's not accepting any new packets, so we just drop it.
-                    let _ = ui_sender.send(UIMessage::Control(packet));
+                    // let _ = ui_sender.send(UIMessage::Control(packet));
                 },
             },
         }

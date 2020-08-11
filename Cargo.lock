@@ -650,6 +650,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "opus"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5e9059a7daf1e6665eb88c4a95ca9ff393a6d276fd66e9d85191280d7e5ec18b"
+dependencies = [
+ "libc",
+ "opus-sys",
+]
+
+[[package]]
+name = "opus-sys"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fad8b294f482f7972fa466b1c64d5a564e4ee6975599d80483ee4fa83f25b6ec"
+dependencies = [
+ "libc",
+ "pkg-config",
+]
+
+[[package]]
 name = "parking_lot"
 version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -861,6 +881,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "ringbuf"
+version = "0.2.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "605dc50025dcaaeb8ce2b6b3583432b446c80c90ecd8463569dba8a040e87886"
+
+[[package]]
 name = "rustc-hash"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -996,12 +1022,14 @@ name = "stutter"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "bytes",
  "cpal",
  "fern",
  "futures",
  "log",
  "mumble-protocol",
- "stammer",
+ "opus",
+ "ringbuf",
  "termion",
  "tokio",
  "tokio-util",

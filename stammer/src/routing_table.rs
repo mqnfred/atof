@@ -69,20 +69,43 @@ impl RoutingTable {
         Ok(())
     }
 
-    pub fn sender(&self, session_id: SessionID) -> Option<&USender<ControlPacket<Clientbound>>> {
-        self.sessions.get(&session_id).map(|s| &s.sender)
+    pub fn target_senders(
+        &self,
+        session_id: SessionID,
+        target: u8,
+    ) -> Result<impl Iterator<Item=&USender<ControlPacket<Clientbound>>>> {
+        if target == 0u8 {
+            Ok(self.room_senders(self.room_id(session_id)?, Some(session_id)))
+        } else {
+            unimplemented!("non-zero targets not supported yet");
+        }
     }
 
     pub fn room_senders(
         &self,
         room_id: RoomID,
+        exclude: Option<SessionID>,
     ) -> impl Iterator<Item=&USender<ControlPacket<Clientbound>>> {
         // FIXME this will panic if somebody requests senders for a room that does not
         // exist this is decided on the client side, so potential ddos from client
         // could use std::iter::empty() but then we're returning != concrete types
         //                       vvvvvvvv
         self.rooms.get(&room_id).unwrap().members.iter().filter_map(move |session_id| {
-            self.sender(*session_id)
+            if exclude.is_some() && exclude.unwrap() == *session_id {
+                None
+            } else {
+                self.sender(*session_id)
+            }
         })
+    }
+
+    pub fn sender(&self, session_id: SessionID) -> Option<&USender<ControlPacket<Clientbound>>> {
+        self.sessions.get(&session_id).map(|s| &s.sender)
+    }
+
+    fn room_id(&self, session_id: SessionID) -> Result<RoomID> {
+        self.sessions.get(&session_id).ok_or_else(|| {
+            Error::msg(format!("unknown session {}", session_id))
+        }).map(|session| session.room_id)
     }
 }
